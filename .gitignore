@@ -1,0 +1,25 @@
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+*.elf
+*.bin
+*.hex
+*.map
+*.o
+*.a
+
+# VSCode
+.vscode/
+
+# Project Sensitive
+include/Secrets.h
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Temporary
+*.log
+*.tmp
