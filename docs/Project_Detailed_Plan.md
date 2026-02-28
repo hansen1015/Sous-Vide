@@ -7,9 +7,10 @@
 - [ ] **Temperature Sensors:** 2x DS18B20 (Waterproof probe type, 1m cable).
 - [ ] **Resistor:** 1x 4.7kΩ (Pull-up for DS18B20).
 - [ ] **Relay:** Solid State Relay (SSR-25DA or similar).
-    - *Note:* While 60W is low current (~0.27A), an SSR is chosen for PID PWM capability. Ensure it accepts 3.3V control input. If not, a transistor driver (2N2222) is needed.
-- [ ] **Heater:** 220V AC Heating Element (60W).
+    - *Note:* For 150W load (~0.68A), an SSR is chosen for PID PWM capability. Ensure it accepts 3.3V control input.
+- [ ] **Heater:** 220V AC Heating Element (150W).
     - *Type:* Immersion cartridge or silicone pad, depending on vessel.
+    - *Config:* Added software power limiter to avoid overshoot/stress.
 - [ ] **Power Supply:** 5V 1A Micro USB Wall Adapter (simplest) OR Hi-Link HLK-PM01 5V module for integrated power.
 
 ### Safety Components (CRITICAL)
