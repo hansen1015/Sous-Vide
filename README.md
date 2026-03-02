@@ -26,8 +26,8 @@
 ### 📱 Dual Interface
 - **Web Dashboard** - VS Code-themed dark mode UI with Fira Code font
 - **Telegram Bot** - Custom keyboard with preset management
-- **OLED Display** - 128×64 local status (SSD1306)
-- **OTA Updates** - Wireless firmware updates via ElegantOTA
+- **OLED Display** - 128×32 local status (SSD1306)
+- **OTA Updates** - Wireless firmware updates with authentication
 
 ### 💾 Customizable
 - **Preset Manager** - Save/load/delete cooking profiles
