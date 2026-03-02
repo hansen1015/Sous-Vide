@@ -1,80 +1,142 @@
 #include "Safety.h"
 
-SafetySystem::SafetySystem() {
-    _status.emergencyStop = false;
-    _status.reason = "";
-    _status.errorCode = 0;
-    _status.currentTemp = 0.0;
-    _status.temp1 = 0.0;
-    _lastCheckTime = millis();
-    _lastTemp = 0.0;
-    _startTime = millis();
+SafetySystem::SafetySystem() 
+    : _lastCheckTime(0)
+    , _lastTemp(0.0f)
+    , _startTime(0)  // Will be set when system starts running
+    , _isInitialized(false)
+    , _isRunning(false) {
 }
 
 void SafetySystem::loop(float t1) {
     unsigned long currentMillis = millis();
-    float dt = (currentMillis - _lastCheckTime) / 1000.0; // Time delta in seconds
-
-    // Update internal state
+    
+    // Update current temperature reading
     _status.temp1 = t1;
+    _status.currentTemp = t1;
     
     // 0. Invalid Sensor Check (DS18B20 returns -127 or NaN on error)
-    if (isnan(t1) || t1 < -100) {
-        _status.emergencyStop = true;
-        _status.reason = "Invalid Sensor Reading";
-        _status.errorCode = ERR_INVALID_SENSOR;
-        _status.currentTemp = 0.0;
+    if (std::isnan(t1) || t1 < -100.0f) {
+        handleInvalidSensor(t1);
         return;
     }
     
-    // Use single sensor temp for safety checks
-    _status.currentTemp = t1;
-
     // 1. Absolute Max Temp
-    if (t1 > ABSOLUTE_MAX_TEMP) {
-        _status.emergencyStop = true;
-        _status.reason = "Over Temperature > 90C";
-        _status.errorCode = ERR_OVER_TEMP;
+    if (t1 > kAbsoluteMaxTemperatureCelsius) {
+        handleOverTemp(t1);
         return;
     }
     
     // 2. Absolute Min Temp (Sensor Error Detection)
-    if (t1 < ABSOLUTE_MIN_TEMP) {
-        _status.emergencyStop = true;
-        _status.reason = "Under Temperature < -50C";
-        _status.errorCode = ERR_UNDER_TEMP;
+    if (t1 < kAbsoluteMinTemperatureCelsius) {
+        handleUnderTemp(t1);
         return;
     }
-
+    
     // 3. Dry Run Protection (Slope Check)
-    // Only check if we have a valid previous temp and minimal time has passed (e.g., 2s) to avoid noise
-    if (dt > 2.0) {
-        float slope = (t1 - _lastTemp) / dt;
-        if (slope > MAX_SLOPE && t1 > 40.0) { // Only checking slope if above 40C to avoid false positives at start
-             _status.emergencyStop = true;
-             _status.reason = "Dry Run Detected (Slope > 0.6C/s)";
-             _status.errorCode = ERR_DRY_RUN;
-             return;
-        }
+    // Initialize on first valid reading - MUST have valid temperature first
+    if (!_isInitialized) {
         _lastTemp = t1;
         _lastCheckTime = currentMillis;
+        _isInitialized = true;
+        Serial.println("[SAFETY] Initialized with valid temperature reading");
+    } else {
+        // Calculate time delta with protection against zero division
+        unsigned long timeDiff = currentMillis - _lastCheckTime;
+        float dt = timeDiff / 1000.0f;
+        
+        // Only check slope if enough time has passed AND dt is non-zero (protect against division by zero)
+        if (timeDiff >= kMinCheckIntervalMs && dt > 0.001f) {
+            float slope = (t1 - _lastTemp) / dt;
+            if (slope > kMaxTemperatureSlopePerSecond && t1 > kDryRunSlopeCheckThreshold) {
+                handleDryRun(t1, slope);
+                return;
+            }
+            _lastTemp = t1;
+            _lastCheckTime = currentMillis;
+        }
     }
-
-    // 4. Watchdog Timer (Max Run Time)
-    if (currentMillis - _startTime > MAX_RUN_TIME) {
-        _status.emergencyStop = true;
-        _status.reason = "24H Timeout Reached";
-        _status.errorCode = ERR_TIMEOUT;
-        return;
+    
+    // 4. Watchdog Timer (Max Run Time) - only check when running
+    if (_isRunning && _startTime > 0) {
+        // Handle millis() overflow gracefully
+        // When millis() overflows, currentMillis becomes small while _startTime is large
+        // The subtraction still works correctly due to unsigned arithmetic wraparound
+        unsigned long elapsed = currentMillis - _startTime;
+        if (elapsed > kMaxRuntimeMilliseconds) {
+            handleTimeout();
+            return;
+        }
+    }
+    
+    // Clear any previous error if all checks pass
+    if (_status.emergencyStop) {
+        _status.emergencyStop = false;
+        _status.reason = "";
+        _status.errorCode = 0;
     }
 }
 
-SafetyStatus SafetySystem::getStatus() {
-    return _status;
+void SafetySystem::handleInvalidSensor(float temp) {
+    _status.emergencyStop = true;
+    _status.reason = "Invalid Sensor Reading";
+    _status.errorCode = kErrInvalidSensor;
+    _status.currentTemp = 0.0f;
+    Serial.printf("[SAFETY] Invalid sensor: %.1f\n", temp);
 }
 
-void SafetySystem::reset() {
+void SafetySystem::handleOverTemp(float temp) {
+    _status.emergencyStop = true;
+    _status.reason = "Over Temperature > 90C";
+    _status.errorCode = kErrOverTemp;
+    Serial.printf("[SAFETY] Over temp: %.1f°C\n", temp);
+}
+
+void SafetySystem::handleUnderTemp(float temp) {
+    _status.emergencyStop = true;
+    _status.reason = "Under Temperature < -50C";
+    _status.errorCode = kErrUnderTemp;
+    Serial.printf("[SAFETY] Under temp: %.1f°C\n", temp);
+}
+
+void SafetySystem::handleDryRun(float temp, float slope) {
+    _status.emergencyStop = true;
+    _status.reason = "Dry Run Detected (Slope > 0.6C/s)";
+    _status.errorCode = kErrDryRun;
+    Serial.printf("[SAFETY] Dry run: %.2f°C/s at %.1f°C\n", slope, temp);
+}
+
+void SafetySystem::handleTimeout() {
+    _status.emergencyStop = true;
+    _status.reason = "24H Timeout Reached";
+    _status.errorCode = kErrTimeout;
+    Serial.println("[SAFETY] 24-hour timeout reached");
+}
+
+void SafetySystem::reset(bool hardReset) {
     _status.emergencyStop = false;
     _status.reason = "";
-    _startTime = millis(); // Reset timer? Or maybe just stop flag. Let's restart timer.
+    _status.errorCode = 0;
+    if (hardReset) {
+        _startTime = millis();
+        _isInitialized = false;
+        _lastTemp = 0.0f;
+        _lastCheckTime = 0;
+        _isRunning = true;  // Mark as running when hard reset
+    }
+    Serial.println("[SAFETY] System reset");
+}
+
+void SafetySystem::start() {
+    if (!_isRunning) {
+        _startTime = millis();
+        _isRunning = true;
+        _isInitialized = false;  // Re-initialize slope detection
+        Serial.println("[SAFETY] System started");
+    }
+}
+
+void SafetySystem::stop() {
+    _isRunning = false;
+    Serial.println("[SAFETY] System stopped");
 }

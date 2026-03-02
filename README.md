@@ -74,23 +74,38 @@
 git clone https://github.com/yourproject/sous-vide.git
 cd sous-vide
 
-# Edit Telegram Bot Token
+# Copy secrets template and edit with your credentials
+cp include/Secrets.h.example src/Secrets.h
 nano src/Secrets.h
 
 # Build and upload
 platformio run --target upload
 ```
 
-### 2. WiFi Setup
+### 2. Configuration
+
+Edit `src/Secrets.h` with your credentials:
+
+```cpp
+#define BOT_TOKEN "YOUR_TELEGRAM_BOT_TOKEN"    // From @BotFather
+#define OTA_USERNAME "admin"                    // OTA update username
+#define OTA_PASSWORD "sousvide2024"             // OTA update password (CHANGE THIS!)
+#define WIFI_AP_PASSWORD "sousvide123"          // WiFi config AP password (min 8 chars)
+```
+
+⚠️ **Security**: Change default passwords before deployment!
+
+### 3. WiFi Setup
 
 1. Power on device
-2. Connect to `SousVide_Config_AP`
+2. Connect to `SousVide_Config_AP` (password: `sousvide123`)
 3. Enter your WiFi credentials
 4. Find IP on OLED display
 
-### 3. Start Cooking!
+### 4. Start Cooking!
 
-**Web**: `http://<device-ip>`  
+**Web**: `http://<device-ip>`
+**OTA Updates**: `http://<device-ip>/update` (requires authentication)
 **Telegram**: `/start` in your bot
 
 ---
@@ -231,8 +246,11 @@ Adjust these for your specific setup. See manual for tuning guide.
 
 ### OTA Updates
 1. Navigate to `http://<device-ip>/update`
-2. Upload `.bin` file
-3. Automatic reboot with new firmware
+2. Enter username and password (default: `admin` / `sousvide2024`)
+3. Upload `.bin` file
+4. Automatic reboot with new firmware
+
+⚠️ **Security**: Change the default OTA password in `src/Secrets.h`!
 
 ### Custom Presets
 Via Telegram:
